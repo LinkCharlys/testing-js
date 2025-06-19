@@ -1,45 +1,62 @@
-
-//* Nuestro objeto de pruebas */
 const BooksService = require('./books.service');
 
-//*Suplantando la clase MongoLib/*
-const MongoLibStub = {
-  getAll: () => [...fakeBooks]
-}
-
-//* Datos Simulados/
-
-const fakeBooks = [
+let mockDatabase = [
   {
-    _id: 1,
+    _id: 'abc1',
     name: "Harry Potter"
   }
+];
+
+const MongoLibStub = {
+  getAll: () => [...mockDatabase],
+  create: (collection, data) => {
+    const newId = 'newBookId123';
+    const newBookWithId = { _id: newId, ...data };
+    mockDatabase.push(newBookWithId);
+    return newBookWithId;
+  }
+};
+
+beforeEach(() => {
+  mockDatabase = [
+    {
+      _id: 'abc1',
+      name: "Harry Potter"
+    }
   ];
+});
 
-
-//*Llamando a Mock/
 jest.mock('../lib/mongo.lib', () => jest.fn().mockImplementation(() => MongoLibStub));
 
 describe('Test for BooksService', () => {
-  /* Variable para instancia del servicio */
   let service;
-  /* Para cada prueba, crear una nueva instancia */
+
   beforeEach(() => {
-    /* Crear instancia del servicio */
     service = new BooksService();
   });
 
-  /* Pruebas para el método getBook */
-  describe('Test for getBooks()', () =>{
+  describe('Test for getBooks()', () => {
     test('Should return a list of books', async () => {
-      /* Arrange: preparar el entorno */
-      /* Act: Acción a probar */
       const books = await service.getBooks({});
-      console.log(books);
-      /* Assert: Confirmar */
+      console.log(books[0]);
       expect(books.length).toEqual(1);
+      expect(books[0]).toEqual(expect.objectContaining({ name: "Harry Potter" }));
     });
   });
 
+  describe('Test for createBook()', () => {
+    test('Should create a new book', async () => {
+      const newBook = {
+        title: 'La Divina comedia',
+        author: 'Dante Alighieri',
+        year: 1967
+      };
 
+      const createdBook = await service.createBook(newBook);
+        console.log('Libro creado', createdBook);
+
+      expect(createdBook).toMatchObject(newBook);
+
+    });
+  });
 });
