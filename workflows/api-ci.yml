@@ -1,0 +1,83 @@
+name: API CI
+
+# on: [push] Esto aplica para No monorepos. Debes ser más especificos.
+
+on:
+    push:
+        paths:
+            - "./api"
+            - ".github/workflows/api-ci.yml"
+jobs:
+    unit-testing:
+        runs-on: macos-latest
+
+
+        defaults:
+            run:
+              working-directory: ./api
+
+
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Setup Node.jobs
+            uses: actions/setup-node@v4
+            with:
+              node-version: 20
+              cache: npm
+              cache-dependency-path: ./api/api/package-lock.json
+
+          - name: Install dependencies
+            run: npm ci
+
+          - name: run unit test
+            run: npm run test
+
+
+    linter:
+        runs-on: macos-latest
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Setup Node.jobs
+            uses: actions/setup-node@v4
+            with:
+              node-version: 20
+              cache: npm
+              cache-dependency-path: ./api/api/package-lock.json
+
+          - name: Install dependencies
+            run: npm ci
+
+          - name: run unit linter
+            run: npm run lint
+
+    e2e:
+        runs-on: macos-latest
+        container:
+          image: node:20
+
+        services:
+          mongo-e2e: mongo:4.4
+          ports:
+                - 27017:27017
+          env:
+              MONGO_INITDB_ROOT_USERNAME: test
+              MONGO_INITDB_ROOT_PASSWORD: test123
+
+
+        steps:
+          - name: Checkout
+            uses: actions/checkout@v4
+
+          - name: Install dependencies
+            run: npm ci
+
+          - name: run e2e
+            run: npm run test:e2e
+
+            env:
+              MONGO_BD_NAME: demo
+              MONGO_URL: mongodb://test:test123@mongo-e2e:27017?retryWrites=true&writeConcern=majority
