@@ -1,39 +1,49 @@
 name: API CI
+
 on:
   push:
     paths:
+      # ¡IMPORTANTE! Esto detecta cualquier cambio dentro de la carpeta 'api/' y sus subcarpetas.
       - "api/**"
+      # El workflow también se ejecutará si modificas este archivo de configuración de CI.
       - ".github/workflows/api-ci.yml"
+    # Considera añadir ramas específicas si solo quieres que se dispare en 'main' o 'develop':
+    # branches:
+    #   - main
+    #   - develop
 
 jobs:
   unit-testing:
-    runs-on: macos-latest
+    runs-on: macos-latest # Puedes considerar 'ubuntu-latest' para un mejor costo y rendimiento
     defaults:
       run:
-        working-directory: api
+        working-directory: api # Todos los comandos 'run' en este trabajo se ejecutarán desde el directorio 'api'
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
       - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
           cache: npm
+          # Ruta correcta para package-lock.json relativa al working-directory.
           cache-dependency-path: api/package-lock.json
       - name: Install dependencies
-        run: npm ci
+        run: npm ci # 'npm ci' es la forma recomendada para instalaciones limpias en CI
       - name: Run unit tests
         run: npm run test
 
   linter:
-    runs-on: macos-latest
+    runs-on: macos-latest # Puedes considerar 'ubuntu-latest'
+    # Este trabajo solo se ejecutará si el trabajo 'unit-testing' finaliza con éxito.
+    needs: unit-testing
     defaults:
       run:
         working-directory: api
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -45,22 +55,34 @@ jobs:
         run: npm run lint
 
   e2e:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-latest # 'ubuntu-latest' es generalmente preferido para trabajos con contenedores
+    # Este trabajo solo se ejecutará si el trabajo 'linter' finaliza con éxito.
+    needs: linter
     services:
+      # Define el servicio de MongoDB. Su nombre 'mongo' se usará en la MONGO_URL.
       mongo:
         image: mongo:4.4
+        # Mapeo de puertos: 27017 (del host) se mapea a 27017 (dentro del contenedor de mongo).
+        # Tu aplicación (dentro del contenedor del job) se conectará a 'mongo:27017'.
         ports:
           - 27017:27017
         env:
           MONGO_INITDB_ROOT_USERNAME: test
           MONGO_INITDB_ROOT_PASSWORD: test123
+        # **¡CRÍTICO!** Configuración de health check para asegurar que MongoDB esté completamente listo.
+        options: >-
+          --health-cmd "mongo --eval 'db.runCommand({ping: 1})'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     defaults:
       run:
         working-directory: api
     steps:
-      - name: Checkout
+      - name: Checkout repository
         uses: actions/checkout@v4
-      - name: Setup Node.js
+      - name: Set up Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -72,4 +94,6 @@ jobs:
         run: npm run test:e2e
         env:
           MONGO_DB_NAME: demo
-          MONGO_URL: mongodb://test:test123@localhost:27017?retryWrites=true&writeConcern=majority
+          # **¡IMPORTANTE!** Usa el nombre del servicio 'mongo' en lugar de 'localhost'.
+          # Agrega 'authSource=admin' si tu usuario 'test' requiere autenticación contra la base de datos de administración.
+          MONGO_URL: mongodb://test:test123@mongo:27017/?authSource=admin&retryWrites=true&writeConcern=majority
